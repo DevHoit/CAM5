@@ -1,0 +1,53 @@
+# CAM5 CORE — proxy inverso con TLS automático.
+#
+# El orden de los bloques `handle` importa: /cam5/api/* debe evaluarse antes
+# que /cam5*, y ambos antes de cualquier comodín del sitio principal.
+
+{$CAM5_DOMAIN} {
+	encode gzip zstd
+
+	# ── API ───────────────────────────────────────────────────────────────
+	# Se quita el prefijo /cam5: la API expone /api/v1/... y el gateway firma
+	# sobre esa ruta, no sobre la pública.
+	handle /cam5/api/* {
+		uri strip_prefix /cam5
+		reverse_proxy cam5-api:8787 {
+			header_up X-Forwarded-Proto {scheme}
+			# Los lotes de reinyección tras un corte largo son grandes y tardan.
+			transport http {
+				read_timeout 120s
+				write_timeout 120s
+			}
+		}
+	}
+
+	# ── Portal ────────────────────────────────────────────────────────────
+	# Sin reescribir: Next.js está compilado con basePath /cam5 y ya sirve sus
+	# rutas y assets bajo ese prefijo.
+	handle /cam5* {
+		reverse_proxy cam5-portal:3000 {
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# ── Resto del sitio ───────────────────────────────────────────────────
+	# Reemplaza este bloque por lo que ya sirvas en hoitlive.com.
+	handle {
+		respond "hoitlive.com" 200
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 20MiB
+			roll_keep 10
+		}
+	}
+}

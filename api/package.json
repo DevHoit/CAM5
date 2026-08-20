@@ -1,0 +1,19 @@
+{
+  "name": "cam5-core-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.18.0" },
+  "scripts": {
+    "start": "node src/server.ts",
+    "dev": "node --watch src/server.ts",
+    "migrate": "node src/migrate.ts",
+    "seed": "node src/seed.ts",
+    "rollup": "node src/rollup.ts",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.2.1",
+    "pg": "^8.13.1"
+  }
+}

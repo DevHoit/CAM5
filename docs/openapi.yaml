@@ -1,0 +1,351 @@
+openapi: 3.1.0
+info:
+  title: CAM5 CORE API
+  version: 1.0.0
+  description: Contrato inicial para una ubicación, un gateway y un controlador Modbus.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /health:
+    get:
+      security: []
+      summary: Salud de la plataforma y adquisición
+      responses:
+        '200':
+          description: Estado actual
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+  /session:
+    get:
+      summary: Usuario y permisos efectivos
+      responses:
+        '200':
+          description: Sesión activa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+  /assets/{assetId}:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    get:
+      summary: Obtener activo
+      responses:
+        '200':
+          description: Activo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Asset' }
+    patch:
+      summary: Actualizar activo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssetPatch' }
+      responses:
+        '200':
+          description: Activo actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Asset' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /assets/{assetId}/channels:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    get:
+      summary: Listar canales y umbrales
+      responses:
+        '200':
+          description: Canales
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Channel' }
+    put:
+      summary: Reemplazar configuración de canales
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: '#/components/schemas/Channel' }
+      responses:
+        '200':
+          description: Configuración aplicada
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Channel' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /assets/{assetId}/readings/latest:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    get:
+      summary: Última lectura por canal
+      responses:
+        '200':
+          description: Lecturas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Reading' }
+  /assets/{assetId}/trends:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+      - { name: channelId, in: query, required: true, schema: { type: string } }
+      - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+      - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+    get:
+      summary: Serie temporal de un canal
+      responses:
+        '200':
+          description: Serie temporal
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Reading' }
+  /alarms:
+    get:
+      summary: Listar alarmas
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, acknowledged, closed] } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Página de alarmas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Alarm' } }
+                  nextCursor: { type: [string, 'null'] }
+  /alarms/{alarmId}/acknowledge:
+    post:
+      summary: Reconocer alarma
+      parameters:
+        - $ref: '#/components/parameters/AlarmId'
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { note: { type: string } } }
+      responses:
+        '200':
+          description: Alarma reconocida
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alarm' }
+  /alarms/{alarmId}/close:
+    post:
+      summary: Cerrar alarma
+      parameters:
+        - $ref: '#/components/parameters/AlarmId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties: { note: { type: string, minLength: 3 } }
+      responses:
+        '200':
+          description: Alarma cerrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alarm' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /work-orders:
+    get:
+      summary: Listar órdenes
+      responses:
+        '200':
+          description: Órdenes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/WorkOrder' } }
+    post:
+      summary: Crear orden
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkOrderInput' }
+      responses:
+        '201':
+          description: Orden creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrder' }
+        '409': { description: Ya existe una orden activa para la alarma }
+  /work-orders/{workOrderId}:
+    patch:
+      summary: Actualizar orden
+      parameters:
+        - { name: workOrderId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkOrderInput' }
+      responses:
+        '200':
+          description: Orden actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrder' }
+  /reports:
+    post:
+      summary: Solicitar generación de reporte
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetId, template, format, from, to]
+              properties:
+                assetId: { type: string }
+                template: { type: string, enum: [condition, events, executive] }
+                format: { type: string, enum: [pdf, xlsx] }
+                from: { type: string, format: date-time }
+                to: { type: string, format: date-time }
+      responses:
+        '202':
+          description: Reporte en proceso
+          content:
+            application/json:
+              schema: { type: object, required: [id, status], properties: { id: { type: string }, status: { type: string, enum: [queued, processing] } } }
+components:
+  securitySchemes:
+    sessionCookie: { type: apiKey, in: cookie, name: cam5_session }
+  parameters:
+    AssetId: { name: assetId, in: path, required: true, schema: { type: string } }
+    AlarmId: { name: alarmId, in: path, required: true, schema: { type: string } }
+  responses:
+    ValidationError:
+      description: Error de validación
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+  schemas:
+    Health:
+      type: object
+      required: [status, timestamp, gateway, controller]
+      properties:
+        status: { type: string, enum: [ok, degraded, offline] }
+        timestamp: { type: string, format: date-time }
+        gateway: { type: string, enum: [online, stale, offline] }
+        controller: { type: string, enum: [online, stale, offline] }
+    Session:
+      type: object
+      required: [user]
+      properties:
+        user:
+          type: object
+          required: [id, name, email, role]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            email: { type: string, format: email }
+            role: { type: string, enum: [administrator, engineer, operator, read_only] }
+    Asset:
+      type: object
+      required: [id, name, location, voltageKv, gatewayId, controllerId]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        location: { type: string }
+        voltageKv: { type: number }
+        gatewayId: { type: string }
+        controllerId: { type: string }
+        timezone: { type: string }
+    AssetPatch:
+      type: object
+      properties:
+        name: { type: string }
+        voltageKv: { type: number }
+        timezone: { type: string }
+    Channel:
+      type: object
+      required: [id, label, type, unit, enabled, warningThreshold, criticalThreshold, modbus]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        zone: { type: string }
+        type: { type: string, enum: [temperature, partial_discharge, humidity] }
+        unit: { type: string }
+        enabled: { type: boolean }
+        warningThreshold: { type: number }
+        criticalThreshold: { type: number }
+        hysteresis: { type: number }
+        delaySeconds: { type: integer, minimum: 0 }
+        modbus:
+          type: object
+          required: [reference, functionCode, dataType, scale, byteOrder]
+          properties:
+            reference: { type: integer, minimum: 40001, maximum: 49999 }
+            functionCode: { type: integer, const: 3 }
+            dataType: { type: string, enum: [int16, uint16] }
+            scale: { type: number }
+            byteOrder: { type: string, enum: [AB, BA] }
+    Reading:
+      type: object
+      required: [channelId, assetId, value, unit, severity, quality, sourceTimestamp, receivedAt, sequence]
+      properties:
+        channelId: { type: string }
+        assetId: { type: string }
+        value: { type: number }
+        unit: { type: string }
+        severity: { type: string, enum: [normal, warning, critical] }
+        quality: { type: string, enum: [good, stale, bad, disabled] }
+        sourceTimestamp: { type: string, format: date-time }
+        receivedAt: { type: string, format: date-time }
+        sequence: { type: integer, minimum: 0 }
+    Alarm:
+      type: object
+      required: [id, assetId, channelId, title, severity, status, openedAt]
+      properties:
+        id: { type: string }
+        assetId: { type: string }
+        channelId: { type: string }
+        title: { type: string }
+        severity: { type: string, enum: [info, warning, critical] }
+        status: { type: string, enum: [open, acknowledged, closed] }
+        openedAt: { type: string, format: date-time }
+        acknowledgedAt: { type: string, format: date-time }
+        acknowledgedBy: { type: string }
+        closedAt: { type: string, format: date-time }
+    WorkOrderInput:
+      type: object
+      required: [title, priority, status, assigneeId]
+      properties:
+        sourceAlarmId: { type: string }
+        title: { type: string }
+        priority: { type: string, enum: [normal, high, critical] }
+        status: { type: string, enum: [pending, in_progress, completed] }
+        assigneeId: { type: string }
+        dueAt: { type: string, format: date-time }
+    WorkOrder:
+      allOf:
+        - { $ref: '#/components/schemas/WorkOrderInput' }
+        - type: object
+          required: [id]
+          properties: { id: { type: string } }
+    ApiError:
+      type: object
+      required: [code, message, traceId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        fieldErrors: { type: object, additionalProperties: { type: string } }
+        traceId: { type: string }

@@ -1,0 +1,22 @@
+export type View = "overview" | "cabinet" | "diagnostics" | "trends" | "alarms" | "history" | "assets" | "reports" | "maintenance" | "settings" | "integrations" | "users" | "notifications";
+export type Severity = "critical" | "warning" | "info";
+export type SensorState = "normal" | "warning" | "critical";
+export type HistoryTab = "measurements" | "alarms" | "audit";
+export type SettingsTab = "asset" | "channels" | "registers" | "gateway";
+export type ModbusDataType = "Int16" | "UInt16";
+export type ModbusByteOrder = "AB" | "BA";
+export type UserRole = "Administrador" | "Ingeniero" | "Operador" | "Solo lectura";
+export type WorkStatus = "Pendiente" | "En curso" | "Completada";
+export type WorkPriority = "Crítica" | "Alta" | "Normal";
+export type WorkOrder = { id: string; title: string; source: string; sourceAlarmId?: string; due: string; priority: WorkPriority; assignee: string; status: WorkStatus };
+export type NoticeTone = "success" | "info" | "warning";
+export type SystemMode = "normal" | "loading" | "stale" | "offline";
+export type ConfirmNote = { label: string; placeholder?: string; required?: boolean };
+export type ConfirmRequest = {
+  title: string;
+  detail: string;
+  confirmLabel: string;
+  tone?: "default" | "danger";
+  note?: ConfirmNote;
+  onConfirm: (note?: string) => void;
+};

@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cam5-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cam5
+      POSTGRES_USER: cam5
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD en .env}
+    volumes:
+      - cam5-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cam5 -d cam5"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Sin puertos publicados: sólo la API alcanza la base.
+    # Para inspección local, descomenta:
+    # ports: ["5432:5432"]
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: cam5-api
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql://cam5:${POSTGRES_PASSWORD}@db:5432/cam5
+      PORT: 8787
+      LOG_LEVEL: info
+      CAM5_REQUIRE_HMAC: "true"
+      CAM5_RAW_RETENTION_DAYS: ${CAM5_RAW_RETENTION_DAYS:-90}
+    ports:
+      - "8787:8787"
+
+  # Agregación y poda de particiones. Proceso aparte para que un problema aquí
+  # nunca afecte la ingesta.
+  rollup:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: cam5-rollup
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql://cam5:${POSTGRES_PASSWORD}@db:5432/cam5
+      CAM5_RAW_RETENTION_DAYS: ${CAM5_RAW_RETENTION_DAYS:-90}
+    command: ["node", "src/rollup.ts", "--loop", "60"]
+
+volumes:
+  cam5-db:
